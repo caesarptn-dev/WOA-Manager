@@ -1,0 +1,39 @@
+name: build-dmg
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (universal)
+        run: swift build -c release --arch arm64 --arch x86_64
+      - name: Bundle .app
+        run: |
+          APP="dist/WoA Manager.app"
+          mkdir -p "$APP/Contents/MacOS"
+          cp .build/apple/Products/Release/WoAManager "$APP/Contents/MacOS/WoAManager"
+          cp Resources/Info.plist "$APP/Contents/Info.plist"
+          mkdir -p "$APP/Contents/Resources"
+          iconutil -c icns Resources/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+          codesign --force --deep -s - "$APP"
+      - name: Make DMG
+        run: |
+          mkdir -p dist/dmg
+          cp -R "dist/WoA Manager.app" dist/dmg/
+          ln -s /Applications dist/dmg/Applications
+          hdiutil create -volname "WoA Manager" -srcfolder dist/dmg -ov -format UDZO dist/WoA-Manager.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WoA-Manager-dmg
+          path: dist/WoA-Manager.dmg
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WoA-Manager.dmg
